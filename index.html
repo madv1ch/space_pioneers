@@ -116,170 +116,278 @@
 			onResize();
 		</script>
 		
-	<script src="https://yandex.ru/games/sdk/v2"></script>
-    <script>
-	var player = null;
-	var sdk = null;
-	var payments = null;
-
-      YaGames.init({
-            adv: {
-                onAdvClose: wasShown => {
-                      console.info('adv closed!');
-                }
-            }
-        })
-        .then(ysdk => {
-            sdk = ysdk;
-            sdk.adv.showFullscreenAdv({callbacks:{}});
-			getInitPlayer();
-      });
-	
-	function getInitPlayer(){
-		return sdk.getPlayer({scopes:false}).then(_player => {
-			player = _player;
-		}).catch(err => {
-			console.log('InitPlayer error: ' + err);
+	<script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
+<script>
+		var isInit = false;
+		Subscriptions();
+		vkBridge.send('VKWebAppInit')
+			.then((data) => {
+			isInit = data.result;
+		})
+		  .catch((error) => {
+			 console.log(JSON.stringify(error));
 		});
-	}	
-
-	function SetLeaderBoard(_data, score){
-		sdk.getLeaderboards().then(lb => {
-				lb.setLeaderboardScore(_data, score);
-			});
-	}
-
-	function GetLeaderBoardEntries(_data){
-		sdk.getLeaderboards().then(lb => {lb.getLeaderboardEntries(_data, {quantityTop:10, includeUser:true, quantityAround:1})
-			.then(res =>
-			{
-				unityGame.SendMessage('YandexSDK', 'BoardEntriesReady', JSON.stringify(res));
+		
+		function Authenticate(){
+			if (isInit) {
+				vkBridge.send('VKWebAppGetUserInfo').then(data =>{
+					unityGame.SendMessage('VKSDK', 'AuthenticateEvent', JSON.stringify(data));
+				})
+				.catch((error) => {
+					unityGame.SendMessage('VKSDK', 'AuthenticateEvent', '');
 				});
-			});
-	}
-
-	function Authenticate(){ sdk.auth.openAuthDialog().then(() => {
-			initPlayer();
-		}).catch(() => {
-			 unityGame.SendMessage('YandexSDK', 'CustomAuthenticateFailed', 'auth failed');
-		});
-	}
-
-	function initPlayer(){
-		return sdk.getPlayer().then(_player => {
-			player = _player;
-			unityGame.SendMessage('YandexSDK', 'CustomAuthenticateSuccess');
-			PlayerInfo();			
-		}).catch(err => {
-			unityGame.SendMessage('YandexSDK', 'CustomAuthenticateFailed', err);
-		});
-	}
-
-	function GetUserAvatar(){
-		var data = {"avatarUrlSmall" : player.getPhoto('small'), "avatarUrlMedium" : player.getPhoto('medium'), "avatarUrlLarge" : player.getPhoto('large')};
-		unityGame.SendMessage('YandexSDK', 'AvatarSuccess', JSON.stringify(data));
-	}
-
-	function GetUserData(){
-		player.getData().then(stats =>{
-				unityGame.SendMessage('YandexSDK', 'DataGetting', JSON.stringify(stats));
-			});
-	}
-
-	function SetUserData(_data){
-		player.setData({data : _data}).then(()=>{
-		}).catch(()=>{console.log('unsaved')});
-	}
-	
-	function Logger(_data){
-		console.log(_data);
-	}	
-
-	function ShowFullscrenAd(){
-		sdk.adv.showFullscreenAdv({
-		  callbacks: {
-				onClose: function(wasShown) {
-				window.focus();
-				unityGame.SendMessage('YandexSDK', 'InterstitialShown');
-			},
-				onError: function(error) {
-				window.focus();
-				unityGame.SendMessage('YandexSDK', 'InterstitialFailed', error);
+			} else {
+				unityGame.SendMessage('VKSDK', 'CriticalError');
 			}
-		  }
-		})
-	}
-	
-	function Review(){
-		sdk.feedback.canReview()
-			.then(({ value, reason }) => {
-				if (value) {
-					sdk.feedback.requestReview()
-						.then(({ feedbackSent }) => {
-							unityGame.SendMessage('YandexSDK', 'ReviewCallback', feedbackSent.toString());
-						})
-				} else {
-					unityGame.SendMessage('YandexSDK', 'ReviewCallback', reason.toString());
+		}		
+		
+		function GetUserData(){
+			vkBridge.send("VKWebAppStorageGet",{"keys":["key_0","key_1","key_2","key_3","key_4","key_5","key_6","key_7","key_8","key_9"]}).then((data) => { 
+				if (data.keys) {
+				  unityGame.SendMessage('VKSDK', 'DataGetting', JSON.stringify(data));
 				}
-			})
-	}	
+				else{
+				unityGame.SendMessage('VKSDK', 'DataGetting', '');
+				}
+				})
+				.catch((error) => {
+				unityGame.SendMessage('VKSDK', 'DataGetting', '');
+				console.log(error);
+			});
+        }			
 
-	function ShowRewardedAd(){
-		sdk.adv.showRewardedVideo({
-			callbacks: {
-				onOpen: () => {
-					unityGame.SendMessage('YandexSDK', 'RewardedOpen');
-					console.log('Video ad open.');
-				},
-				onRewarded: () => {
-					unityGame.SendMessage('YandexSDK', 'Rewarded');
-					console.log('Rewarded!');
-				},
-				onClose: () => {
-					window.focus();
-					unityGame.SendMessage('YandexSDK', 'RewardedClose');
-					console.log('Video ad closed.');
-				}, 
-				onError: (error) => {
-					window.focus();
-					unityGame.SendMessage('YandexSDK', 'RewardedError', error);
-					console.log('Error while open video ad:', error);
-				}			
-			  }
-		})
-	}
+		function SetUserData(id, data){
+			vkBridge.send('VKWebAppStorageSet', {
+			   key: id,
+			   value: data
+			  })
+			  .then((data) => { 
+				if (data.result) {
+				  unityGame.SendMessage('VKSDK', 'DataSavedEvent', JSON.stringify(data));
+				}
+				else{
+				  unityGame.SendMessage('VKSDK', 'DataSavedEvent', '');
+				}
+			  })
+			  .catch((error) => {
+				unityGame.SendMessage('VKSDK', 'DataSavedEvent', '');
+				console.log(error);
+			  });
+		}		
+		
+      function ShowInterstitial(){
+		vkBridge.send('VKWebAppShowNativeAds', { ad_format: 'interstitial' })
+		.then((data) => {
+		window.focus();
+			if (data.result)
+			unityGame.SendMessage('VKSDK', 'InterstitialEvent', JSON.stringify(data));
+			else 
+			unityGame.SendMessage('VKSDK', 'InterstitialEvent', '');
+		}).catch((error) => { console.log(error);});
+      }
+
+      function ShowReward(){
+		vkBridge.send('VKWebAppShowNativeAds', { ad_format: 'reward' })
+		.then((data) => {
+		window.focus();
+			if (data.result)
+			unityGame.SendMessage('VKSDK', 'RewardEvent', JSON.stringify(data));
+			else 
+			unityGame.SendMessage('VKSDK', 'RewardEvent', '');
+		}).catch((error) => { console.log(error);});
+      }		
 	  
-	function initPayments(){
-		sdk.getPayments({signed:true}).then(_payments => {
-			payments = _payments;
-			unityGame.SendMessage('YandexSDK', 'InitPurchasesSuccess');
-		}).catch(error => {
-			unityGame.SendMessage('YandexSDK', 'InitPurchasesFailed', error);
-		})
-	}
+      function CheckInterstitial(){
+		vkBridge.send('VKWebAppCheckNativeAds', { ad_format: 'interstitial' })
+		.then((data) => {
+			if (data.result)
+			unityGame.SendMessage('VKSDK', 'CheckInterstitialEvent', JSON.stringify(data));
+			else 
+			unityGame.SendMessage('VKSDK', 'CheckInterstitialEvent', '');
+		}).catch((error) => { console.log(error);});
+      }
 
-	function Buy(id){
-		payments.purchase(id).then(purchase => {
-		window.focus();
-		  unityGame.SendMessage('YandexSDK', 'PurchaseSuccess', purchase.signature);
-		  payments.consumePurchase(purchase.purchaseToken);
-		}).catch(error => {
-		window.focus();
-		  unityGame.SendMessage('YandexSDK', 'PurchaseFailed', error);
-		})
-	}
-	
-	function PlayerInfo(){
-		if(player != null) unityGame.SendMessage('YandexSDK', 'PlayerReceived', JSON.stringify(player));
-			else unityGame.SendMessage('YandexSDK', 'PlayerReceived', '');
-	}		
-	
-	function SendDeviceInfo(){
-		var data = {"IsMobile" : sdk.deviceInfo.isMobile().toString(), "IsDesktop" : sdk.deviceInfo.isDesktop().toString(), "IsTablet" : sdk.deviceInfo.isTablet().toString(), "IsTV" : sdk.deviceInfo.isTV().toString()};
-		unityGame.SendMessage('YandexSDK', 'DeviceInfoReceived', JSON.stringify(data));
-		PlayerInfo();
-	}	
-    </script>
+      function CheckReward(){
+		vkBridge.send('VKWebAppCheckNativeAds', { ad_format: 'reward' })
+		.then((data) => {
+			if (data.result)
+			unityGame.SendMessage('VKSDK', 'CheckRewardEvent', JSON.stringify(data));
+			else 
+			unityGame.SendMessage('VKSDK', 'CheckRewardEvent', '');
+		}).catch((error) => { console.log(error);});
+      }	
+	  
+      function WallPost(uid, attach, mes){
+		vkBridge.send('VKWebAppShowWallPostBox', {
+			message: mes,
+			attachment: attach,
+			owner_id: uid
+		  })
+		  .then( (data) => {
+			unityGame.SendMessage('VKSDK', 'WallPostEvent');
+			console.log(JSON.stringify(data));
+		  })
+		  .catch( (error) => {
+			console.log(JSON.stringify(error));
+		  })
+      }		  
+		
+      function ActivityFeed(id, version, token, score){
+			vkBridge.send('VKWebAppCallAPIMethod', {
+			  method: 'secure.addAppEvent',
+			  params: {
+				user_id: id,
+				activity_id: '2',
+				value: score,
+				v: version,
+				access_token: token
+			  }})
+			  .then((data) => { 
+				if (data.response) {
+				  unityGame.SendMessage('VKSDK', 'ActivityFeedEvent');
+				}
+			  })
+			  .catch((error) => {
+				console.log(JSON.stringify(error));
+			  });
+		}			
+		
+		function Logger(_data){
+			console.log(_data);
+		}	
+		
+		function URLDataGET(_data){
+			fetch(_data)
+			  .then(response => response.text())
+			  .then(res => {
+					unityGame.SendMessage('VKSDK', 'URLDataGET', res);
+					});
+
+		}	
+		
+		function Purchase(id){
+			vkBridge.send('VKWebAppShowOrderBox', { 
+				  type: 'item',
+				  item: id
+				  })
+				  .then((data) => {
+				  window.focus();
+					if (data.success) {
+						unityGame.SendMessage('VKSDK', 'PurchaseEvent', id);
+					}
+					else
+					{
+						unityGame.SendMessage('VKSDK', 'PurchaseEvent', '');
+					}
+				  })
+				  .catch((error) => {
+				  window.focus();
+					unityGame.SendMessage('VKSDK', 'PurchaseEvent', '');
+					console.log(JSON.stringify(error));
+				  });
+		}	
+
+		function Invite(){
+			vkBridge.send('VKWebAppShowInviteBox')
+			  .then( (data) => {
+				if (data.success) {
+					unityGame.SendMessage('VKSDK', 'InviteSuccess');
+				  console.log('Приглашения не отправлены: ', data.notSentIds);
+				}
+			  })
+			  .catch( (error) => {
+				console.log(JSON.stringify(error));
+			  });
+		}	
+		
+		function JoinGroup(id){
+			vkBridge.send('VKWebAppJoinGroup', {
+			  group_id: id
+			  })
+			  .then((data) => { 
+				if (data.result) {
+				  unityGame.SendMessage('VKSDK', 'JoinGroupSuccess');
+				}
+			  })
+			  .catch((error) => {
+				console.log(JSON.stringify(error));
+			  });
+		}			
+
+		function LeaderBoard(){
+			vkBridge.send("VKWebAppShowLeaderBoardBox")
+			  .then( (data) => {
+				if (data.success) {
+					unityGame.SendMessage('VKSDK', 'LeaderBoardSuccess');
+				}
+			  })
+			  .catch( (error) => {
+				console.log(JSON.stringify(error));
+			  });
+		}	
+
+		function ToFavorites(){
+			vkBridge.send('VKWebAppAddToFavorites')
+			  .then((data) => { 
+				if (data.result) {
+				  unityGame.SendMessage('VKSDK', 'FavoritesSuccess');
+				}
+			  })
+			  .catch((error) => {
+				console.log(JSON.stringify(error));
+			  });
+		}			
+
+		function AuthToken(id, scopes){
+			vkBridge.send('VKWebAppGetAuthToken', { 
+			  app_id: id, 
+			  scope: scopes
+			  })
+			  .then((data) => { 
+				unityGame.SendMessage('VKSDK', 'AuthTokenEvent', JSON.stringify(data));
+			  })
+			  .catch((error) => {
+			  unityGame.SendMessage('VKSDK', 'AuthTokenEvent', '');
+				console.log(JSON.stringify(error));
+			  });
+		}
+
+		function AppGetFriends(){
+			vkBridge.send('VKWebAppGetFriends', {multi:true})
+			  .then((data) => { 
+				if (data.users) {
+					unityGame.SendMessage('VKSDK', 'FriendsEvent', JSON.stringify(data));
+				}
+				else {
+					unityGame.SendMessage('VKSDK', 'FriendsEvent', '');
+				}
+			  })
+			  .catch((error) => {
+				unityGame.SendMessage('VKSDK', 'FriendsEvent', '');
+				console.log(JSON.stringify(error));
+			  });
+		}		
+		
+		function Subscriptions() {      
+			vkBridge.subscribe((e) => {
+			  if (e.detail.type === 'VKWebAppViewHide') {
+				unityGame.SendMessage('VKSDK', 'AppViewHide');
+			  }
+			});
+			vkBridge.subscribe((e) => {
+			  if (e.detail.type === 'VKWebAppViewRestore') {
+				unityGame.SendMessage('VKSDK', 'AppViewRestore');
+			  }
+			});		
+		}
+		
+		function base64_encode(s) {      
+			return btoa(unescape(encodeURIComponent(s)));
+		}
+		function base64_decode(s) {      
+			return decodeURIComponent(escape(atob(s)));
+		}		
+</script>
 	</div>
 </body>
 
